@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { percentile, rpcMinimum } from "../src/oracle.ts";
-import { COMPUTE_BUDGET, type Transaction, VOTE, base58, budget, expectedFee, writableAccounts } from "../src/solana.ts";
+import { COMPUTE_BUDGET, type Transaction, VOTE, base58, budget, expectedFee, invokedPrograms, writableAccounts } from "../src/solana.ts";
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 /** A base58 encoder of the test's own, to build instruction data. */
@@ -80,6 +80,22 @@ test("writable accounts follow the header, plus writable lookups", () => {
     meta: { fee: 0, err: null, loadedAddresses: { writable: ["F"] } },
   };
   assert.deepEqual(writableAccounts(tx), ["A", "C", "D", "F"]);
+});
+
+test("invoked programs include inner instructions, which can name programs from lookups", () => {
+  const tx: Transaction = {
+    version: 0,
+    transaction: {
+      message: {
+        header: { numRequiredSignatures: 1, numReadonlySignedAccounts: 0, numReadonlyUnsignedAccounts: 1 },
+        accountKeys: ["Payer", "Pool", PROGRAM],
+        instructions: [{ programIdIndex: 2, data: "1" }],
+      },
+    },
+    meta: { fee: 5000, err: null, loadedAddresses: { writable: ["LookupW"], readonly: ["Inner1", "Inner2"] }, innerInstructions: [{ instructions: [{ programIdIndex: 5 }, { programIdIndex: 2 }] }] },
+  };
+  assert.deepEqual([...invokedPrograms(tx)].sort(), [PROGRAM, "Inner2"].sort(), "index 5 is the second read-only lookup");
+  assert.deepEqual([...invokedPrograms({ ...tx, meta: { ...tx.meta!, innerInstructions: undefined } })], [PROGRAM]);
 });
 
 test("legacy and v0 budgets come from ComputeBudget instructions", () => {

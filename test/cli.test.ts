@@ -116,6 +116,31 @@ test("a single account is compared with what the RPC says about it alone", async
   assert.match(out, /for 1,000,000 compute units, in lamports: p50/);
 });
 
+test("--program counts transactions calling the program, alone or with an account", async () => {
+  // The busiest program the saved blocks call directly, other than the ubiquitous ones.
+  const common = new Set(["11111111111111111111111111111111", "ComputeBudget111111111111111111111111111111", "Vote111111111111111111111111111111111111111"]);
+  const counts = new Map<string, number>();
+  for (const tx of blocks.flatMap((block) => block.transactions)) {
+    if (isVote(tx)) continue;
+    for (const program of new Set(tx.transaction.message.instructions.map((ix) => tx.transaction.message.accountKeys[ix.programIdIndex]))) if (!common.has(program)) counts.set(program, (counts.get(program) ?? 0) + 1);
+  }
+  const [program, calls] = [...counts].sort((a, b) => b[1] - a[1])[0];
+  const alone = JSON.parse((await run("--json", "--program", program)).out);
+  assert.equal(alone.matching, calls);
+  assert.deepEqual(alone.programs, [program]);
+  const both = await run("--json", "--program", program, ...rpc.accounts);
+  assert.equal(both.code, 0, both.out);
+  const writesAndCalls = blocks
+    .flatMap((block) => block.transactions)
+    .filter((tx) => !isVote(tx) && writableAccounts(tx).some((account) => rpc.accounts.includes(account)) && tx.transaction.message.instructions.some((ix) => tx.transaction.message.accountKeys[ix.programIdIndex] === program)).length;
+  assert.equal(JSON.parse(both.out).matching, writesAndCalls);
+  const text = await run("--program", program, rpc.accounts[0]);
+  assert.match(text.out, /write-lock the account and invoke the program/);
+  const bad = await run("--program", "nope");
+  assert.equal(bad.code, 2);
+  assert.match(bad.out, /not an address: nope/);
+});
+
 test("a fee the chain charged differently exits 1 and names the transaction", async () => {
   feeTampered = true;
   try {
