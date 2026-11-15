@@ -1,0 +1,34 @@
+{
+ "accounts": [
+  "3oJ2ESxvUw9sZURF9UNkWoXrvviR6Hyw7JyHvpgqEuvT",
+  "GUJcnyEqVwegBLR2aEt8ykDX8ud1hBGeXxksi1RpDecU",
+  "HManMyNLTchwEAvoSsDR9evGJKYPq2fRuSeKYW2FHSRn"
+ ],
+ "none": {
+  "469729974": 0,
+  "469729980": 0,
+  "469729986": 0
+ },
+ "combined": {
+  "469729974": 372,
+  "469729980": 805,
+  "469729986": 22004
+ },
+ "single": {
+  "3oJ2ESxvUw9sZURF9UNkWoXrvviR6Hyw7JyHvpgqEuvT": {
+   "469729974": 372,
+   "469729980": 805,
+   "469729986": 22004
+  },
+  "GUJcnyEqVwegBLR2aEt8ykDX8ud1hBGeXxksi1RpDecU": {
+   "469729974": 372,
+   "469729980": 805,
+   "469729986": 22004
+  },
+  "HManMyNLTchwEAvoSsDR9evGJKYPq2fRuSeKYW2FHSRn": {
+   "469729974": 372,
+   "469729980": 805,
+   "469729986": 22004
+  }
+ }
+}

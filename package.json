@@ -1,0 +1,23 @@
+{
+  "name": "sol-fee-oracle",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Solana priority fee percentiles for the accounts you write to, read from recent blocks on any stock RPC, v1 transactions included, and checked against the chain's own fees",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "sol-fee-oracle": "src/main.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc",
+    "test": "node --test test/*.test.ts",
+    "crosscheck": "node scripts/crosscheck.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  }
+}
