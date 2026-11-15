@@ -33,7 +33,12 @@ export interface Transaction {
       transactionConfig?: { computeUnitLimit: number | null; priorityFee: number | null };
     };
   };
-  meta: { fee: number; err: unknown; loadedAddresses?: { writable: string[] } } | null;
+  meta: {
+    fee: number;
+    err: unknown;
+    loadedAddresses?: { writable: string[]; readonly?: string[] };
+    innerInstructions?: { instructions: { programIdIndex: number }[] }[];
+  } | null;
 }
 
 const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -62,6 +67,17 @@ export function writableAccounts(tx: Transaction): string[] {
   const signers = header.numRequiredSignatures;
   const statics = accountKeys.filter((_, i) => (i < signers ? i < signers - header.numReadonlySignedAccounts : i < accountKeys.length - header.numReadonlyUnsignedAccounts));
   return [...statics, ...(tx.meta?.loadedAddresses?.writable ?? [])];
+}
+
+/**
+ * Every program a transaction invokes, at the top level or from another program. Instructions
+ * index into the static keys followed by the writable and then the read-only lookups.
+ */
+export function invokedPrograms(tx: Transaction): Set<string> {
+  const { accountKeys, instructions } = tx.transaction.message;
+  const keys = [...accountKeys, ...(tx.meta?.loadedAddresses?.writable ?? []), ...(tx.meta?.loadedAddresses?.readonly ?? [])];
+  const inner = (tx.meta?.innerInstructions ?? []).flatMap((group) => group.instructions);
+  return new Set([...instructions, ...inner].map((instruction) => keys[instruction.programIdIndex]));
 }
 
 export interface Budget {

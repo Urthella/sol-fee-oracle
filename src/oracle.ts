@@ -4,7 +4,7 @@
 // slot, must match that minimum worked out from the same transactions.
 
 import { type Rpc, RpcError } from "./rpc.ts";
-import { type Transaction, budget, expectedFee, isVote, writableAccounts } from "./solana.ts";
+import { type Transaction, budget, expectedFee, invokedPrograms, isVote, writableAccounts } from "./solana.ts";
 
 export interface Block {
   slot: number;
@@ -15,6 +15,8 @@ export const PERCENTILES = [25, 50, 75, 90, 99] as const;
 
 export interface Report {
   accounts: string[];
+  /** Programs a counted transaction must invoke, at the top level or from another program. */
+  programs: string[];
   slots: number[];
   /** Non-vote transactions in those blocks. */
   transactions: number;
@@ -71,8 +73,9 @@ export async function collect(rpc: Rpc, count: number, accounts: string[]): Prom
   return { blocks, rpcFees: new Map(fees.map((fee) => [fee.slot, fee.prioritizationFee])) };
 }
 
-export function analyze(blocks: Block[], rpcFees: Map<number, number>, accounts: string[]): Report {
+export function analyze(blocks: Block[], rpcFees: Map<number, number>, accounts: string[], programs: string[] = []): Report {
   const wanted = new Set(accounts);
+  const invoked = new Set(programs);
   const prices: number[] = [];
   let transactions = 0;
   let v1 = 0;
@@ -88,6 +91,7 @@ export function analyze(blocks: Block[], rpcFees: Map<number, number>, accounts:
       const expected = expectedFee(tx);
       if (expected !== tx.meta.fee) feeCheck.mismatches.push({ slot: block.slot, signature: tx.transaction.signatures?.[0], expected, charged: tx.meta.fee });
       if (wanted.size && !writableAccounts(tx).some((account) => wanted.has(account))) continue;
+      if (invoked.size && ![...invokedPrograms(tx)].some((program) => invoked.has(program))) continue;
       prices.push(budget(tx).price);
       if (tx.version === 1) v1++;
     }
@@ -103,6 +107,7 @@ export function analyze(blocks: Block[], rpcFees: Map<number, number>, accounts:
   if (rpcValues.length) rpcCheck.median = percentile(rpcValues, 50);
   return {
     accounts,
+    programs,
     slots: blocks.map((block) => block.slot),
     transactions,
     matching: prices.length,
@@ -122,7 +127,10 @@ const share = (part: number, whole: number) => `${whole ? Math.round((100 * part
 
 export function describe(report: Report, computeUnits: number): string {
   const { slots, percentiles, feeCheck, rpcCheck } = report;
-  const scope = report.accounts.length ? `write-lock ${report.accounts.length === 1 ? "the account" : `one of the ${report.accounts.length} accounts`}` : "are counted";
+  const which = (n: number, noun: string) => (n === 1 ? `the ${noun}` : `one of the ${n} ${noun}s`);
+  const scope =
+    [report.accounts.length ? `write-lock ${which(report.accounts.length, "account")}` : "", report.programs.length ? `invoke ${which(report.programs.length, "program")}` : ""].filter(Boolean).join(" and ") ||
+    "are counted";
   const lines = [
     `${slots.length} blocks, slots ${slots[0]} to ${slots.at(-1)}`,
     `  ${number(report.transactions)} non-vote transactions; ${number(report.matching)} ${scope}, ${share(report.v1, report.matching)} of them v1`,

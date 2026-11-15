@@ -58,11 +58,25 @@ you trade against. Write-locks are what Solana's scheduler contends on, and they
 node src/main.ts --rpc https://your-rpc.example --blocks 20 POOL_ADDRESS
 ```
 
+`--program ID` counts the transactions that invoke a program instead, whether they call it
+directly or through another program. Repeat it for more programs; with accounts as well, a
+transaction must do both. `getRecentPrioritizationFees` can't answer this. It treats a program's
+address like any account, so it only sees transactions that list the program as writable, and
+almost none do. In one block, 92 transactions called pump.fun's program at a median of 124,172
+micro-lamports per compute unit. One of them listed it as writable, and the RPC answered with
+that transaction's 544,594. In a block 6 slots earlier, none did, and it answered 0 while 160
+callers paid a median of 101,049.
+
+```sh
+node src/main.ts --program 6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P
+```
+
 - `--rpc URL` picks the RPC, by default the public mainnet one. Public RPCs rate-limit `getBlock`;
   the tool waits and asks again, but a private RPC is much faster.
 - `--blocks N` sets how many of the latest confirmed blocks to read: 10 by default, up to 100.
 - `--cu UNITS` sets the compute units for the line in lamports: 200,000 by default.
 - `--json` prints the report as JSON.
+- `--program ID` counts a program's callers, as above.
 
 Exit codes: 0 when both checks hold, 1 when one doesn't, 2 when something went wrong.
 
@@ -78,7 +92,11 @@ Exit codes: 0 when both checks hold, 1 when one doesn't, 2 when something went w
    - **v1:** both come from `transactionConfig`. The price per compute unit is the priority fee
      in micro-lamports divided by the limit, rounded down as the RPC rounds it.
 3. **Counts the transactions** that write-lock one of the accounts, from the message header and the
-   writable lookups, or all non-vote ones, and gives nearest-rank percentiles of their price.
+   writable lookups, or all non-vote ones, and gives nearest-rank percentiles of their price. With
+   `--program`, a counted transaction must also invoke one of the programs, from its own
+   instructions or the inner ones the block records. Inner instructions can name a program
+   loaded from a lookup table, so their indexes cover the static keys, then the writable lookups,
+   then the read-only ones.
 4. **Checks every fee**: 5,000 lamports per signature, including the signatures inside Ed25519,
    secp256k1 and secp256r1 precompile instructions, plus the priority fee, must equal the fee the
    block says was charged.
@@ -96,17 +114,24 @@ Exit codes: 0 when both checks hold, 1 when one doesn't, 2 when something went w
     for all three together. The accounts were picked so the minimums aren't zero;
   - paying v1 transactions are charged by `transactionConfig`, even when they carry a
     `SetComputeUnitPrice` instruction with another price.
+- **A program, from real blocks** saved by
+  [`scripts/fetch-program-fixtures.ts`](scripts/fetch-program-fixtures.ts), with their inner
+  instructions:
+  - some transactions reach the program only from other programs, and `--program` counts them;
+  - the RPC's answers for the program come out of the transactions that list it as writable,
+    which are fewer than a tenth of its callers.
 - **The rules on their own**, with instruction data built by hand: Bitcoin's base58 test vectors,
   the header's writable accounts, explicit and default limits, the 1.4M cap, v1's rounding,
   precompile signatures, and the RPC's minimum with failed and v1 transactions.
 - **End to end.** The CLI runs against a fake JSON-RPC server serving the saved blocks:
   - the percentiles match ones worked out in the test;
+  - `--program` counts a program's callers, alone or together with accounts;
   - a skipped slot is left out, and `--blocks` takes the latest blocks;
   - a fee the chain charged differently, or an RPC minimum that doesn't come out of the blocks,
     exits 1 and names the slot;
   - a 429 is waited out;
-  - RPC errors, an unreachable RPC, a bad address and bad numbers exit 2.
-- **Mutation testing.** Thirty-three deliberate bugs were planted one at a time, and the tests
+  - RPC errors, an unreachable RPC, a bad account or program address and bad numbers exit 2.
+- **Mutation testing.** Thirty-nine deliberate bugs were planted one at a time, and the tests
   caught every one.
 - **Live**, with `npm run crosscheck`. On 2026-11-15, for no account, the three accounts the latest
   block wrote most, and the busiest of them, over 10 blocks each:
